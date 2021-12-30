@@ -1,0 +1,559 @@
+---
+title: "PRÁCTICA 2"
+author: "Arturo Hernández Sánchez y Laia Cebey Ripoll"
+output:
+  pdf_document:
+    highlight: default
+    number_sections: yes
+---
+
+```{r load_libraries, include=FALSE}
+library(knitr)
+library(stringr)
+library(lubridate) 
+#library(ggbiplot)
+#library(matlib)
+library(gridExtra)
+library(modeest)
+library(psych)
+library(dplyr)
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Presentación de la actividad
+
+En esta práctica se elabora un caso práctico orientado a aprender a identificar los datos relevantes para un proyecto analítico y usar las herramientas de integración, limpieza, validación y análisis de las mismas. 
+
+Los objetivos concretos de esta práctica son:
+
+- Aprender a aplicar los conocimientos adquiridos y su capacidad de resolución de problemas en entornos nuevos o poco conocidos dentro de contextos más amplios o multidisciplinares.
+- Saber identificar los datos relevantes y los tratamientos necesarios (integración, limpieza y validación) para llevar a cabo un proyecto analítico.
+- Aprender a analizar los datos adecuadamente para abordar la información contenida en los datos.
+- Identificar la mejor representación de los resultados para aportar conclusiones sobre el problema planteado en el proceso analítico.
+- Actuar con los principios éticos y legales relacionados con la manipulación de datos en función del ámbito de aplicación.
+- Desarrollar las habilidades de aprendizaje que les permitan continuar estudiando de un modo que tendrá que ser en gran medida autodirigido o autónomo.
+- Desarrollar la capacidad de búsqueda, gestión y uso de información y recursos en el ámbito de la ciencia de datos.
+
+# Resolución de la actividad
+Para esta actividad se utilizará el dataset que se puede encontrar en la plataforma kaggle, concretamente en el enlace https://www.kaggle.com/artimous/complete-fifa-2017-player-dataset-global/version/5. 
+
+# Descripción del dataset
+
+El dataset escogido contiene información de el estilo del videojuego de consola Fifa 2017, así como estadísticas reales de los jugadores de futbol. El conjunto de datos contiene más de 17500 registros y 53 variables.
+
+Las principales variables que se usarán en esta actividad son:
+
+- Name (Nombre del jugador)
+- Nationality (Nacionalidad del jugador)
+- Club_Joining (Fecha en la que empezó en el club)
+- Contract_Expire (Año finalización del contrato)
+- Rating (Valoración global del jugador, entre 0 y 100)
+- Height (Altura)
+- Weight (Peso)
+- Preffered_Foot (Pie preferido)
+- Birth_Date (Fecha de nacimiento)
+- Age (Edad)
+- Work_Rate (valoración cualitativa en términos de ataque-defensa)
+- Ball_Control
+
+La descripción de los atributos se puede consultar en https://www.fifplay.com/encyclopedia. La descripción de las abreviaturas de la posición del jugador en el campo se puede consultar en https://www.dtgre.com/2016/10/fifa-17-position-abbreviations-acronyms.html.
+
+# Integración y selección de los datos de interés a analizar
+
+Empezamos cargando los datos y seleccionando las columnas que nos interesan.
+```{r,eval=TRUE,echo=TRUE}
+datos <- read.csv('FullData.csv', encoding='UTF-8')
+print(head(datos))
+datos<- datos[,c('Name', 'Nationality', 'Club_Position', 'Club_Joining','Contract_Expiry', 
+                 'Rating', 'Height', 'Weight', 'Preffered_Foot','Birth_Date', 'Age', 
+                 'Work_Rate', 'Ball_Control')]
+str(datos)
+```
+Vemos que tanto las fechas como los campos Height y Weight se han interpretado como carácteres. También hay otros campos que se tienen que podrían poner como factores en vez de únicamente como carácteres como Work_Rate y Preferred_Foot. Los cambios y limpieza de estos campos la haremos en apartados posteriores.  
+
+# Limpieza de los datos
+
+A continuación, vamos a limpiar los datos para poderlos analizar posteriormente. 
+
+## Análisis de duplicados
+
+Miramos con la función duplicated que no haya ningún registro que tenga todos los campos iguales.
+
+```{r,eval=TRUE,echo=TRUE}
+any(duplicated(datos[,c('Name', 'Nationality', 'Club_Joining','Contract_Expiry', 
+                        'Rating', 'Height', 'Weight', 'Preffered_Foot',
+                        'Birth_Date', 'Age', 'Work_Rate' )]))
+```
+Vemos que no hay ninguno. Por último, vamos a hacer la comprovación con menos campos. Vamos a considerar que si el nombre, la nacionalidad y la fecha de nacimiento son iguales se trata de un duplicado.
+
+```{r,eval=TRUE,echo=TRUE}
+any(duplicated(datos[,c('Name', 'Nationality', 'Birth_Date')]))
+```
+Vemos que, de nuevo, no encontramos ningún duplicado. 
+
+## Normalización de los datos cuantitativos
+
+
+### Rating 
+
+
+El tipo de esta variable ya está bien cargada con el tipo int. Vamos a ver que los valores estén entre 0 y 100. 
+
+```{r,eval=TRUE,echo=TRUE}
+print(min(datos$Rating))
+print(max(datos$Rating))
+```
+
+Vemos que efectivamente, los valores se encuentran entre 0 y 100. 
+
+### Height
+
+
+Vemos que todos los registros están en cm.
+
+```{r,eval=TRUE,echo=TRUE}
+length(datos$Height[str_detect(datos$Height, 'cm') & !is.na(datos$Height)])
+```
+A continuación eliminamos las unidades y convertimos al tipo numeric el resultado. Por último, cambiamos el tipo de la columna a integer porque no tenemos decimales.  
+
+```{r,eval=TRUE,echo=TRUE}
+# Eliminamos las comas y las reemplazamos con puntos
+datos$Height <- str_replace(datos$Height, ',', '.')
+
+# Eliminamos cm de los registros en cm y convertimos a numeric
+datos$Altura[str_detect(datos$Height, 'cm') & !is.na(datos$Height)]<-
+  as.numeric(str_replace(datos$Height[str_detect(datos$Height, 'cm') 
+                                      & !is.na(datos$Height)], ' cm', ''))
+# Por último, substituimos la columna height por la columna nueva
+datos$Height <- as.integer(datos$Altura)
+datos$Altura <- NULL
+```
+
+### Weight 
+
+Vemos que todos los registros están en kg.
+
+```{r,eval=TRUE,echo=TRUE}
+length(datos$Weight[str_detect(datos$Weight, ' kg') & !is.na(datos$Weight)])
+```
+A continuación eliminamos las unidades y convertimos al tipo numeric el resultado. Por último, cambiamos el tipo de la columna a integer porque no tenemos decimales.  
+
+```{r,eval=TRUE,echo=TRUE}
+# Eliminamos las comas y las reemplazamos con puntos
+datos$Weight <- str_replace(datos$Weight, ',', '.')
+
+# Eliminamos kg de los registros en kg y los convertimos a numeric
+datos$Peso[str_detect(datos$Weight, ' kg') & !is.na(datos$Weight)] <- 
+  as.numeric( str_replace(datos$Weight[str_detect(datos$Weight, ' kg') 
+                                       &  !is.na(datos$Weight) ], ' kg', ''))
+
+# Por último, substituimos la columna weight por la columna 
+#nueva convertida a entero como se especifica en el enunciado
+datos$Weight <- as.integer(datos$Peso)
+datos$Peso <- NULL
+```
+
+
+## Normalización de los datos cualitativos
+
+
+### Name y Nationality 
+
+Para estas dos columnas eliminamos los espacios en blanco antes y después de su valor (con la función str_trim) y ponemos la primera letra de cada palabra en mayúsculas (con la función str_to_title).
+
+```{r,eval=TRUE,echo=TRUE}
+datos$Name <- str_to_title(str_trim(datos$Name, side='both'))
+datos$Nationality <-  str_to_title(str_trim(datos$Nationality, side='both'))
+```
+
+
+### Preferred_Foot 
+
+
+Cambiamos los registros con valor 1 a Left y los registros con valor 2 a Right. Luego convertimos la variable a un factor ya que se trata de un atributo categórico nominal.
+
+```{r,eval=TRUE,echo=TRUE}
+datos$Preffered_Foot[datos$Preffered_Foot==1] <- 'Left'
+datos$Preffered_Foot[datos$Preffered_Foot==2] <- 'Right'
+datos$Preffered_Foot <- as.factor(datos$Preffered_Foot)
+```
+
+
+### Work_Rate 
+
+
+Empezamos mirando qué valores toma esta variable. 
+
+```{r,eval=TRUE,echo=TRUE}
+print(unique(datos$Work_Rate))
+```
+Reemplazamos las categorías cortadas con tres letras.
+
+```{r,eval=TRUE,echo=TRUE}
+datos$Work_Rate <-str_replace(datos$Work_Rate, 'Hig /','High /')
+datos$Work_Rate <-str_replace(datos$Work_Rate, 'Med /','Medium /')
+
+datos$Work_Rate <-str_replace(datos$Work_Rate, '/ Hig$','/ High')
+datos$Work_Rate <-str_replace(datos$Work_Rate, '/ Med$','/ Medium')
+
+print(unique(datos$Work_Rate))
+```
+
+Una vez disponemos de esta información, cambiamos esta variable al tipo ordered de R ya que se trata de un atributo categórico nominal. Se podría argumentar que es un atributo categórico ordinal ya que low es más bajo que medium y medium es más bajo que high. Sin embargo, no se puede saber si por ejemplo low/high es más alto o más bajo que medium/medium. Es por esta razón que se convertirá al tipo de R factor.
+
+```{r,eval=TRUE,echo=TRUE}
+datos$Work_Rate <-as.factor(datos$Work_Rate)
+```
+
+
+
+## Posibles inconsistencias y variables tipo fecha
+
+Empezamos cambiando el tipo de las columnas Club_Joining y Birth_Date a fecha.
+
+```{r,eval=TRUE,echo=TRUE}
+datos$Club_Joining <- as.Date(datos$Club_Joining, "%m/%d/%Y") 
+datos$Birth_Date <- as.Date(datos$Birth_Date, "%m/%d/%Y") 
+```
+
+### Club_Joining 
+
+
+Para la fecha Club_Joining tenemos que comprovar que está en los rango de 1990 a 2017. 
+
+```{r,eval=TRUE,echo=TRUE}
+print(min(datos$Club_Joining,na.rm = TRUE))
+print(max(datos$Club_Joining, na.rm = TRUE))
+```
+Vemos que efectivamente los datos están en el rango correcto. 
+
+
+### Contract_Expiry >= Club_Joining? 
+
+
+Comprobamos que no haya registros con contract expiry < club joining.
+
+```{r,eval=TRUE,echo=TRUE}
+datos[datos$Contract_Expiry < as.integer(format(datos$Club_Joining,"%Y")),]
+```
+
+
+### Revisar si la edad corresponde a la fecha de nacimiento
+
+```{r,eval=TRUE,echo=TRUE}
+datos$edades <- as.integer(floor(time_length(as.Date('01/01/2017', "%m/%d/%Y") 
+                                             - datos$Birth_Date, "years")))
+# Vemos para qué registros no coinciden  
+print(sum(datos$Age != datos$edades))
+# Ponemos el valor correcto en la columna Age
+datos$Age <- datos$edades
+# Eliminamos la columna edades
+datos$edades <- NULL
+```
+Como vemos que en varios registros la edad no corresponde con la edad calculada con la fecha de nacimiento, así que la corregimos. 
+
+## Identificación y tratamiento de ceros o elementos vacíos 
+
+
+```{r,eval=TRUE,echo=TRUE}
+datos[rowSums(is.na(datos)) > 0, ]
+```
+Vemos que únicamente hay una fila con valores vacíos, concretamente faltan las fechas de Club_Joining y Contract_Expiry. Buscando más información, vemos que es debido a que en 2017 no estaba en ningún club porque se retiró en 2014. Por lo tanto, no tiene sentido que rellenemos estos valores. 
+
+Si por ejemplo tuviésemos algun valor de altura o de peso vacío podríamos imputar los valores con una regresión lineal porque sabemos que estas dos variables están muy relacionadas.
+
+## Identificación y tratamiento de valores extremos
+
+Empezamos con los valores de altura. Utilizamos el boxplot para ver los valores considerados atípicos. 
+
+```{r,eval=TRUE,echo=TRUE}
+boxplot(datos$Height)
+sort(boxplot.stats(datos$Height)$out)
+```
+Podemos ver que los valores que están fuera del rango interquartílico no se alejan mucho de él y además tienen valores razonables de altura para un jugador de fútbol. Por esta razón, no los consideramos atípicos. 
+
+A continuación, repetimos el análisis para el peso. 
+
+
+```{r,eval=TRUE,echo=TRUE}
+boxplot(datos$Weight)
+sort(boxplot.stats(datos$Weight)$out)
+```
+En este caso tenemos más valores fuera del rango intercuartil pero de nuevo no se alejan mucho de éste y tienen valores razonables para un jugador de fútbol.
+
+## Estudio descriptivo de las variables cuantitativas
+
+Por último, hacemos un estudio descriptivo de las variables cuantitativas, que son Rating, Height, Weight y Age. Las medidas de tendencia central que vamos a analizar son la media, la mediana y la moda y las medidas de dispersión,la variana, la desviación estándar, los cuartiles, la simetría y la curtosis.
+
+```{r,eval=TRUE,echo=TRUE}
+dfEst <- data.frame()
+for (col in c("Rating", "Height", "Weight", "Age")){ 
+  min <- min(datos[, col], na.rm = TRUE)
+  q1 <- quantile(datos[, col], probs = 0.25, na.rm = TRUE)
+  media <- mean.default(datos[, col], na.rm = TRUE)
+  mediana <- median.default(datos[, col], na.rm = TRUE)
+  moda <- mfv(datos[, col])
+  var <- var(datos[, col], na.rm = TRUE)
+  desvest <- sd(datos[, col], na.rm = TRUE)
+  q3 <- quantile(datos[, col], probs = 0.75, na.rm = TRUE)
+  max <- max(datos[, col], na.rm = TRUE)
+  s <- skew(datos[, col])
+  c <- kurtosi(datos[, col])
+  dfEst <- rbind(dfEst,data.frame( "Mínimo"=min, "Q1"=q1, "Media"=media, 
+                                   "Mediana"=mediana, "Moda"=moda,"Varianza"=var, 
+                                   "Desviación Estándar"=desvest, "Q3"=q3, 
+                                   "Máximo"=max, "Simetría"=s, "Curtosis"=c) )
+}
+rownames(dfEst) <- c("Rating", "Height", "Weight", "Age")
+print(dfEst)
+```
+En cuanto a las medidas de tendencia central, se puede observar que tanto la media, como la mediana y la moda son muy parecidas en los cuatro atributos de forma que todas son representativas de los atributos.
+
+Un valor de simetría negativo significa que la mayoría de datos son menores que la media, este es el caso de Rating y Height. Contrariamente, un valor positivo de la simetría significa que la mayoría de casos son mayores que la media, que sería el caso de Weight y Age. Para todos los atributos, el valor está muy cerca del 0, lo que significa que están repartidos de manera basante igual a ambos lados de la media.
+
+El valor de la desviación estándar nos sirve para ver cómo de alejados están los puntos de su media. Vemos que el atributo que tiene una desviación estándar más bajo, teniendo en cuenta su media, es Height.
+
+Por último, el valor de curtosis nos indica cómo de concentrados están los valores alrededor de su media. como mayor sea, más cerca de la media se encuentran y como menor, más alejados. Se considera que un valor > 0 una distribución leptocúrtica, un valor = 0 una distribución normal y valor < 0 una distribución platicúrtica. En estos casos tenemos valores muy cercanos a 0, por lo que se puede considerar que todos los atributos siguen una distribución normal.  
+
+## Archivo datos limpios
+
+Como último paso de la limpieza, guardamos los datos en un archivo csv llamado fifa_clean.csv.
+
+```{r,eval=TRUE,echo=TRUE}
+
+write.csv(datos,'fifa_clean.csv')
+```
+# Análisis de los datos
+
+## Selección de los grupos que se quieren analizar/comparar
+
+Vamos a comenzar obteniendo las muestras que utilizaremos posteriormente para realizar el contraste correspondiente que dará respuesta la pregunta de investigación que nos plantearemos. El objetivo será obtener una muestra para los jugadores zurdos y otra para los diestros:
+
+```{r,eval=TRUE,echo=TRUE}
+# Jugadores que no son porteros
+datos_filtered <- datos[datos$Club_Position!='GK',]
+# Obtenemos la muestra para diestros y zurdos:
+Left <- datos_filtered[datos_filtered$Preffered_Foot=='Left',]
+Right <- datos_filtered[datos_filtered$Preffered_Foot=='Right',]
+
+# Seleccionamos las variables de interés para el contraste:
+Left_R <- Left$Rating
+Right_R <- Right$Rating
+
+Left_BC <- Left$Ball_Control
+Right_BC <- Right$Ball_Control
+```
+
+## Comprobación de la normalidad y homogeneidad de la varianza
+
+Comencemos ahora por el contraste de normalidad. Las hipótesis del contraste que realizaremos para cada una de las variables de interés son las siguientes:
+$$
+H_0: \text{La muestra obtenida proviene de una población que sigue una distribución normal}
+$$ $$
+H_1: \text{La muestra obtenida no proviene de una población que sigue una distribución normal}
+$$
+Realizaremos el contraste de normalidad de Lilliefors:
+
+```{r,eval=TRUE,echo=TRUE}
+library(nortest)
+lillie.test(Right_BC)
+lillie.test(Left_BC)
+
+lillie.test(Right_R)
+lillie.test(Left_R)
+```
+Como podemos observar, en todos los casos optenemos un p-valor$<0.05=\alpha$, por lo que, para cada uno de los contrastes realizados en cada una de las muestras, rechazamos $H_0$ con un nivel de significación $\alpha=0.05$ y concluimos que los datos de todas las muestras no provienen de una distribución normal.
+
+Sin embargo, como el tamaño de las muestras es grande, por el teorema central del límite, podemos asumir que las muestras provienen de una población normal, por lo que podemos aplicar inferencia paramétrica para muestras grandes.
+
+Realicemos ahora un test de homocedasticidad sobre cada par de muestras que consideraremos posteriormente en el contraste para así poder decidir si elegimos un contraste para varianzas desconocidas iguales o diferentes.
+
+Como se ha indicado anteriormente, podemos asumir que las muestras provienen de una población normal, por lo que podemos utilizar el test de homogeneidad *F-test*. Las hipótesis para cada uno de los contrastes realizados serán las siguientes:
+
+$$
+H_0: \text{Ambas muestras provienen de poblaciones con misma varianza}
+$$ 
+$$
+H_1: \text{Las muestras provienen de poblaciones con distinta varianza}
+$$
+
+```{r,eval=TRUE,echo=TRUE}
+var.test(Right_BC, Left_BC)
+var.test(Right_R, Left_R)
+```
+En ambos contrastes obtenemos un p-valor$<0.05=\alpha$, por lo que rechazamos la hipótesis nula $H_0$ con un nivel de significación $\alpha=0.05$ y concluimos que, en ambos casos, los pares de muestras considerados provienen de poblaciones con varianza distinta.
+
+Vamos ahora a realizar el test de homogeneidad de Fligner-Killen. A diferencia del anterior, se trata de un test no paramétrico, el cual compara las varianzas basándose en la mediana. Este contraste de homogeneidad es más adecuado cuando no se cumple que las muestras provengan de una población normal. Las hipótesis de contraste serán las mismas que para el caso del *F-test*:
+
+```{r,eval=TRUE,echo=TRUE}
+fligner.test(list(Right_BC, Left_BC))
+fligner.test(list(Right_R, Left_R))
+```
+En los dos contrastes obtenemos un p-valor$<0.05=\alpha$, por lo que, rechazamos la hipótesis nula $H_0$ con un nivel de significación $\alpha=0.05$ y de nuevo concluimos que, en ambos casos, los pares de muestras considerados provienen de poblaciones con varianza distinta.
+
+## Aplicación de pruebas estadísticas para comparar los grupos de datos
+
+### Comparación de jugadores diestros y zurdos
+
+A partir de las muestras obtenidas en el apartado anteiror para diestros y zurdos, vamos a realizar una serie contrastes que nos permitirán ver si los jugadores zurdos tienen mejor Ball_Control o Rating que los diestros.
+
+#### ¿Los jugadores zurdos tienen mejor Ball_Control que los diestros?
+
+Tenemos que realizar un contraste sobre las muestras *Right_BC* y *Left_BC*. Sean $\mu_{\text{Right}_\text{BC}}$ y $\mu_{\text{Left}_\text{BC}}$ las medias poblacionales correspondientes a las poblaciones asociadas a las muestras *Right_BC* y *Left_BC* respectivamente. Entonces, las hipótesis del contraste a realizar con las siguientes:
+$$
+H_0: \mu_{\text{Left}_\text{BC}} = \mu_{\text{Right}_\text{BC}}
+$$ $$
+H_1: \mu_{\text{Left}_\text{BC}} > \mu_{\text{Right}_\text{BC}}
+$$
+Realizamos por tanto un contraste unilateral de dos muestras independientes sobre la media con varianzas poblacionales desconocidas no iguales, por lo que el estadístico de contraste es el siguiente:
+$$
+t = \dfrac{\bar{x}_{\text{Left}_\text{BC}}-\bar{x}_{\text{Right}_\text{BC}}}{\sqrt{\dfrac{s_{\text{Left}_\text{BC}}^2}{n_{\text{Left}_\text{BC}}}+\dfrac{s_{\text{Right}_\text{BC}}^2}{n_{\text{Right}_\text{BC}}}}}
+$$
+Donde $\bar{x}_{\text{Left}_\text{BC}}$ y $\bar{x}_{\text{Right}_\text{BC}}$ son las medias muestrales, $s_{\text{Left}_\text{BC}}^2$ y $s_{\text{Right}_\text{BC}}^2$ son las cuasivarianzas y $n_{\text{Left}_\text{BC}}$ y $n_{\text{Right}_\text{BC}}$ son los tamaños de las muestras de *Ball_Control* para los zurdos y diestros respectivamente.
+
+Este estadístico sigue una distribución $t$ de Student con $\upsilon$ grados de libertad, donde
+
+$$
+\upsilon = \dfrac{ \left( \dfrac{s_{\text{Left}_\text{BC}}^2}{n_{\text{Left}_\text{BC}}}+\dfrac{s_{\text{Right}_\text{BC}}^2}{n_{\text{Right}_\text{BC}}}\right)^2}{\dfrac{(s_{\text{Left}_\text{BC}}^2/n_{\text{Left}_\text{BC}})^2}{n_{\text{Left}_\text{BC}}-1}+\dfrac{(s_{\text{Right}_\text{BC}}^2/n_{\text{Right}_\text{BC}})^2}{n_{\text{Right}_\text{BC}}-1}}
+$$
+Al ser un test unilateral por la derecha, la zona de aceptación de la hipótesis nula estará en el intervalo $(-\infty, t_{\upsilon,1-\alpha})$, donde $\alpha$ es el nivel de significación del contraste.
+
+```{r,eval=TRUE,echo=TRUE}
+t.test(Left_BC, Right_BC, alternative="greater", var.equal=FALSE, conf.level = 0.95)
+```
+Como podemos observar, obtenemos un p-valor$<0.05=\alpha$, por lo que rechazamos la hipótesis nula con un nivel de significación $\alpha=0.05$, y concluimos que los jugadores zurdos tienen mejor Ball_Control que los diestros.
+
+#### ¿Los jugadores zurdos tienen mejor rating que los diestros?
+
+Tenemos que realizar un contraste sobre las muestras *Right_R* y *Left_R*. Sean $\mu_{\text{Right}_\text{R}}$ y $\mu_{\text{Left}_\text{R}}$ las medias poblacionales correspondientes a las poblaciones asociadas a las muestras *Right_R* y *Left_R* respectivamente. Entonces, las hipótesis del contraste a realizar con las siguientes:
+$$
+H_0: \mu_{\text{Left}_\text{R}} = \mu_{\text{Right}_\text{R}}
+$$ $$
+H_1: \mu_{\text{Left}_\text{R}} > \mu_{\text{Right}_\text{R}}
+$$
+Realizamos por tanto un contraste unilateral de dos muestras independientes sobre la media con varianzas poblacionales desconocidas no iguales, por lo que el estadístico de contraste es el siguiente:
+$$
+t = \dfrac{\bar{x}_{\text{Left}_\text{R}}-\bar{x}_{\text{Right}_\text{R}}}{\sqrt{\dfrac{s_{\text{Left}_\text{R}}^2}{n_{\text{Left}_\text{R}}}+\dfrac{s_{\text{Right}_\text{R}}^2}{n_{\text{Right}_\text{R}}}}}
+$$
+Donde $\bar{x}_{\text{Left}_\text{R}}$ y $\bar{x}_{\text{Right}_\text{R}}$ son las medias muestrales, $s_{\text{Left}_\text{BC}}^2$ y $s_{\text{Right}_\text{BC}}^2$ son las cuasivarianzas y $n_{\text{Left}_\text{R}}$ y $n_{\text{Right}_\text{R}}$ son los tamaños de las muestras de *Ball_Control* para los zurdos y diestros respectuvamente.
+
+Este estadístico sigue una distribución $t$ de Student con $\upsilon$ grados de libertad, donde
+
+$$
+\upsilon = \dfrac{ \left( \dfrac{s_{\text{Left}_\text{R}}^2}{n_{\text{Left}_\text{R}}}+\dfrac{s_{\text{Right}_\text{R}}^2}{n_{\text{Right}_\text{R}}}\right)^2}{\dfrac{(s_{\text{Left}_\text{R}}^2/n_{\text{Left}_\text{R}})^2}{n_{\text{Left}_\text{R}}-1}+\dfrac{(s_{\text{Right}_\text{R}}^2/n_{\text{Right}_\text{R}})^2}{n_{\text{Right}_\text{R}}-1}}
+$$
+Al ser un test unilateral por la derecha, la zona de aceptación de la hipótesis nula estará en el intervalo $(-\infty, t_{\upsilon,1-\alpha})$, donde $\alpha$ es el nivel de significación del contraste.
+
+```{r,eval=TRUE,echo=TRUE}
+t.test(Left_R, Right_R, alternative="greater", var.equal=FALSE, conf.level = 0.95)
+```
+Como podemos observar, obtenemos un p-valor$<0.05=\alpha$, por lo que rechazamos la hipótesis nula con un nivel de significación $\alpha=0.05$, y concluimos que los jugadores zurdos tienen mejor Rating que los diestros.
+
+### ¿Qué variables cuantitativas influyen más en el *Rating* del jugador?
+
+Calculamos la matriz de correlación de las variables cuantitativas a utilizar:
+```{r,eval=TRUE,echo=TRUE}
+cor(datos%>%select('Rating', 'Ball_Control', 'Height', 'Weight', 'Age'))
+```
+Como podemos observar, las variables que presentan una mayor correlación con la variable *Rating* son las variables *Ball_Control* y *Age*, ambas con correlación positiva, aunque no presentan una correlación especialmente fuerte. 
+
+Las correlaciones mas bajas vemos que se presentan con las variables *Height* y *Weight*.
+
+No observamos correlación negativa con ninguna de las variables consideradas respecto a la variable *Rating*.
+
+### Modelo de regresión lineal
+
+Vamos ahora a ajustar distintos modelos de regresión lineal con la finalidad de poder predecir el valor de la variable *Rating*. Tomaremos distintas variables explicaticas, para así poder discutir cuál podría ser el mejor modelo. 
+
+Para las construcción del modelo, vamos a considerar como variables independientes, *Height, Weight, Age, Ball_Control*, y como variable dependiente, *Rating*. Comencemos construyendo el modelo de regresión lineal múltiple considerando todas las variables explicativas:
+```{r,eval=TRUE,echo=TRUE}
+modelo_1 <- lm(datos$Rating~datos$Height+datos$Weight+datos$Age+datos$Ball_Control)
+summary(modelo_1)
+```
+Como podemos observar, el coeficiente de determinación que obtenemos es $0.4413$, lo cual indica que el modelo puede explicar el $44.13\%$ de la variabilidad de los datos.
+
+
+Respecto al contraste para cada cada uno de los coeficientes correspondientes a cada una de las variables del modelo, en todos los casos obtenemos un $p-valor<0.05$, por lo que para cada uno de los coeficientes $\beta_i$, con $i\in\{\textit{Height}, \textit{Weight}, \textit{Age}, \textit{BallControl}, \textit{Intercept}\}$  de la ecuación del modelo, si realizamos el contraste:
+$$ 
+H_0: \beta_i = 0
+$$ $$
+H_1: \beta_i \neq 0
+$$
+Rechazamos la $H_0$ con un nivel de significación $\alpha=0.05$ y concluimos que el contraste es significativo para cada $\beta_i$ con un nivel de significación $\alpha=0.05$.
+
+Si realizamos ahora el siguiente contraste:
+$$ H_0: \beta_\textit{Intercept} = \beta_\textit{Height} = \beta_\textit{Weight} = \beta_\textit{Age} = \beta_\textit{BallControl} = 0$$
+$$H_1: \exists i \in \{\textit{Height}, \textit{Weight}, \textit{Age}, \textit{BallControl}, \textit{Intercept}\}: \beta_i \neq 0 $$
+
+
+Como obtenemos un $p-valor<0.05$, rechazamos $H_0$ con un nivel de significación $\alpha=0.05$ y concluimos que el modelo es globalmente válido.
+
+Ajustemos ahora distintos modelos considerando distintas variables explicativas:
+```{r,eval=TRUE,echo=TRUE}
+modelo_2 <- lm(datos$Rating~datos$Height+datos$Age+datos$Ball_Control)
+summary(modelo_2)
+modelo_3 <- lm(datos$Rating~datos$Age+datos$Ball_Control)
+summary(modelo_3)
+modelo_4 <- lm(datos$Rating~datos$Height+datos$Weight)
+summary(modelo_4)
+```
+Realizando los mismos contrastes que para el modelo anterior, en el que hemos considerado todas las variables explicativas, vemos que todos los modelos ajustados son globalmente válidos y todas las variables son significativas.
+
+Para comparar los distintos modelos, nos fijamos en el coeficiente $R^2$ ajustado. Tanto $R^2$ como $R^2$ ajustado informan sobre la bondad del ajuste, sin embargo el primero depende del número de variables explicativas consideradas, es decir, es mayor cuantas más variables explicativas se consideren, aunque estas no sean significativas, mientras que el segundo no depende del número de variables explicativas consideradas, por lo que es más fiable. Cuando más cerano a $1$ sea su valor, mejor será el modelo.
+
+Observando el resultado de los modelos ajustados, vemos que tras eliminar la variable *Weight* del primer modelo, obtenemos un resultado muy parecido al obtenido en el modelo con todas las variables explicativas, Vemos un coeficiente $R^2$ ajustado ligeramente menor, por lo que parece un modelo ligeramente peor. 
+
+En el *modelo_3* se consideran las variables explicativas *Age* y *Ball_Control*. Otenemos un coeficiente $R^2$ ajustado aún menor, por lo que no parece que haya mejoría en modelo.
+
+El último de ellos, es con diferencia el peor de todos los modelos. Obtenemos un coeficiente $R^2$ ajustado de $0.02759$. Es un modelo malo.
+
+Si observamos la matriz de correlación obtenida en el apartado anterior, vemos como precitamente las variables consideradas en este último modelo (*Height* y *Weight*), son las que presentan menor correlación con la variable *Rating*.
+
+En definitiva, el mejor modelo obtenedo ha sido el *modelo_1*.
+
+# Representación de los resultados a partir de tablas y gráficas.
+
+Hay varias maneras de visualizar los resultados obtenidos de la comparación de jugadores diestros y zurdos. Una manera sencilla de ver cómo de diferentes o iguales son estas variables en los dos datasets (Rating y Ball_Control), es utilizar un boxplot. Empezamos con rating. 
+
+```{r,eval=TRUE,echo=TRUE}
+boxplot(Left$Rating, Right$Rating, names=c("Left", "Right"), 
+        horizontal = TRUE, main = "Comparison of ratings", xlab = "Rating")
+```
+Podemos ver el rating de las dos muestras se parecen bastante, con la mediana y Q1 de los zurdos ligeramente mayores que las de los diestros.  
+
+Ahora vamos a visualizar Ball_control.
+
+```{r,eval=TRUE,echo=TRUE}
+boxplot(Left$Ball_Control, Right$Ball_Control, names=c("Left", "Right"), 
+        horizontal = TRUE, main = "Comparison of Ball_Control", xlab = "Ball_Control")
+```
+Podemos observar que para ball control la mediana de los zurdos también está ligeramente por encima de la de los diestros. Además, en este caso la diferencia más clara es que el valor de Q1 de los zurdos es bastante mayor que el de los diestros. 
+
+# Resolución del problema. A partir de los resultados obtenidos, ¿cuáles son las conclusiones? ¿Los resultados permiten responder al problema?
+
+Tras realizar distintos constrastes, hemos podido ver como sí que existe una cierta incluencia en las variables *Ball_Control* y *Rating* entre jugadores zurdos y diestros.
+
+También hemos obtenido ciertos modelos de regresión con la finalidad de poder predecir la variable *Rating* en función de ciertas variables cuantiativas del juego de datos, siendo el mejor de ellos el que tiene por variables indipendientes *Height*, *Weight*, *Age* y *Ball_Control*, y el peor de ellos, el que tiene únicamente como variables explicativas *Height* y *Weight*. No obstante, no hemos obtenido un modelo realmente bueno al no tener ninguno de ellos un coeficiente $R^2$ ajustado especialmente alto.
+
+# Referencias
+
+* https://rpubs.com/Joaquin_AR/218466
+* Vegas, E. (2017). Preprocesamiento de datos. Material UOC.
+* Gibergans, J. (2017). Regresión lineal múltiple. Material UOC.
+* Rovira, C. (2008). Contraste de hipótesis. Material UOC.
+* Test for homogeneity of variances - Lavene’s test and the Fligner
+
+# Contribuciones al trabajo
+
+```{r,eval=TRUE,echo=FALSE,warning=FALSE}
+Contribuciones <- c('Investigación previa','Redacción de las respuestas','Desarrollo del código')
+Firma <- c('Arturo Hernández y Laia Cebey', 'Arturo Hernández y Laia Cebey','Arturo Hernández y Laia Cebey')
+df_firmas <- data.frame(Contribuciones, Firma)
+grid.table(df_firmas)
+```
+
+El vídeo con la presentación de la actividad se puede encontrar en https://drive.google.com/file/d/1_BHrOoazctFoweWs2jXvSvNxhVeuaP2W/view?usp=sharing.
+El repositorio de github donde se puede encontrar el código es https://github.com/lcebeyuoc/PRA2_Tipologia_UOC.
