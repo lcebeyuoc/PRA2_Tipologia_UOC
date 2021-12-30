@@ -22,7 +22,6 @@ Arturo Hernández Sánchez, Laia Cebey Ripoll.
 * **PAC2.pdf**: Fichero PDF generado a partir del fichero R Markdown 'PAC2.Rmd'.
 * **FullData.csv**: Juego de datos original.
 * **fifa_clean.csv**: Juego de datos final.
-* (vídeo)
 
 ## Referencias
 
